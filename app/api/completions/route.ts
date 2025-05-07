@@ -1,11 +1,11 @@
-import Anthropic from "@anthropic-ai/sdk";
 import Handlebars from "handlebars";
 import { NextRequest, NextResponse } from "next/server";
 import { Ragie } from "ragie";
 import { z } from "zod";
+import { generateText } from "ai";
+import { model } from "./models";
 
 const ragie = new Ragie({ auth: process.env.RAGIE_API_KEY });
-const anthropic = new Anthropic();
 
 const payloadSchema = z.object({
   message: z.string(),
@@ -16,6 +16,9 @@ const payloadSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  if (typeof model === "undefined") {
+    throw new Error("No model provided");
+  }
   const json = await request.json();
   const payload = payloadSchema.parse(json);
 
@@ -32,9 +35,8 @@ export async function POST(request: NextRequest) {
     now: new Date().toISOString(),
   });
 
-  const anthropicResponse = await anthropic.messages.create({
-    model: "claude-3-7-sonnet-latest",
-    max_tokens: 1000,
+  const modelResponse = await generateText({
+    model,
     messages: [
       {
         role: "user",
@@ -42,16 +44,18 @@ export async function POST(request: NextRequest) {
       },
       {
         role: "user",
-        content: ragieResponse.scoredChunks.map((chunk) => ({
-          type: "document",
-          source: {
-            type: "text",
-            media_type: "text/plain",
-            data: chunk.text,
-          },
-          title: chunk.documentName,
-          citations: { enabled: true },
-        })),
+        content: JSON.stringify(
+          ragieResponse.scoredChunks.map((chunk) => ({
+            type: "document",
+            source: {
+              type: "text",
+              media_type: "text/plain",
+              data: chunk.text,
+            },
+            title: chunk.documentName,
+            citations: { enabled: true },
+          }))
+        ),
       },
       {
         role: "user",
@@ -61,7 +65,7 @@ export async function POST(request: NextRequest) {
   });
 
   return NextResponse.json({
-    modelResponse: anthropicResponse,
+    modelResponse,
     retrievalResponse: ragieResponse,
   });
 }
