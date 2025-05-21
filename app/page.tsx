@@ -32,6 +32,8 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [open, setOpen] = useState<boolean>(false);
   const [message, setMessage] = useState<string>("");
+  const [openrouterModel, setOpenrouterModel] = useState<string>("");
+  const [isOpenRouter, setIsOpenRouter] = useState<boolean>(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -59,6 +61,23 @@ export default function Home() {
 
     setSystemPrompt(pendingSystemPrompt);
     localStorage.setItem("systemPrompt", pendingSystemPrompt);
+    
+    // If OpenRouter is being used, save the model
+    if (isOpenRouter) {
+      localStorage.setItem("openrouterModel", openrouterModel);
+      
+      // Update the environment variable via API
+      fetch('/api/update-openrouter-model', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ model: openrouterModel }),
+      }).catch(error => {
+        console.error('Error updating OpenRouter model:', error);
+      });
+    }
+    
     setOpen(false);
   };
 
@@ -94,6 +113,19 @@ export default function Home() {
   };
 
   useEffect(() => {
+    // Check if OpenRouter is being used
+    fetch('/api/llm-provider')
+      .then(response => response.json())
+      .then(data => {
+        setIsOpenRouter(data.provider === 'openrouter');
+        if (data.provider === 'openrouter' && data.model) {
+          setOpenrouterModel(data.model);
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching LLM provider:', error);
+      });
+
     const savedSystemPrompt = localStorage.getItem("systemPrompt");
     if (savedSystemPrompt) {
       setSystemPrompt(savedSystemPrompt);
@@ -113,6 +145,10 @@ export default function Home() {
     const savedRerank = localStorage.getItem("rerank");
     if (savedRerank) {
       setRerank(savedRerank === "true");
+    }
+    const savedOpenrouterModel = localStorage.getItem("openrouterModel");
+    if (savedOpenrouterModel) {
+      setOpenrouterModel(savedOpenrouterModel);
     }
   }, []);
 
@@ -141,6 +177,22 @@ export default function Home() {
                   </button>
                 </DialogDescription>
                 <form onSubmit={handleSystemPromptSubmit}>
+                  {isOpenRouter && (
+                    <div className="mb-4">
+                      <label htmlFor="openrouterModel" className="block text-sm font-medium mb-1">
+                        OpenRouter Model
+                      </label>
+                      <input
+                        type="text"
+                        id="openrouterModel"
+                        name="openrouterModel"
+                        className="w-full p-2 border-1 border-gray-300 rounded-md"
+                        value={openrouterModel}
+                        onChange={(e) => setOpenrouterModel(e.target.value)}
+                        placeholder="Enter OpenRouter model name"
+                      />
+                    </div>
+                  )}
                   <textarea
                     name="systemPrompt"
                     className="w-full h-[600px] p-2 border-1 border-gray-300 rounded-md mb-4"
